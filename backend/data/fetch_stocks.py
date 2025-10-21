@@ -2,6 +2,7 @@
 # _____________________________________ Module 1 _____________________________________ #
 
 import requests # run `pip install requests` if haven't already
+import pandas as pd
 from pprint import pprint
 
 # For code running (print testing, etc...), run the file as a `module` with the flag -m
@@ -22,7 +23,10 @@ def fetch_stock_data(params:str, base_url:str=" https://www.alphavantage.co", en
     
     '''
     result = {}
-    request_uri = f'' # TODO 2: build the request URI here!! use the parameters (base_url, endpoint, params) as building blocks
+    base_url = 'https://www.alphavantage.co'
+    endpoint = 'query'
+    params = 'function=TIME_SERIES_MONTHLY&symbol=IBM&apikey=QTX7LZ15VYHS2FWB'
+    request_uri = f'{base_url}/{endpoint}?{params}' 
     try:
         
         response = requests.get(request_uri) # creates the request
@@ -35,27 +39,111 @@ def fetch_stock_data(params:str, base_url:str=" https://www.alphavantage.co", en
             print('Yay! The connection works!\n')
 
             data:dict = response.json() # get the content of the API. This should include the JSON files
-            pprint(data)
+            #pprint(data)
+            get_data_details(data)
             
             # TODO 4: Uncomment and implement
-            # details = get_data_details(data)
+            details = get_data_details(data)
+            pprint(details)
             
             # TODO 5
-            # standing = get_standing(details)
-            # result = details["standing"] = standing
+            standing = get_standing(details)
+            result = details["standing"] = standing
         
-        # return result # Done
+        return result # Done
 
     except Exception as some_error:
         print(f"There was an issue with the data fetching function. Error:\n{some_error}")
         return None
 
-fetch_stock_data('', '', '') # TODO 3: Test the function!
+
 
 # TODO 4
-# def get_data_details(data:dict)->dict:
-    # pass # Follow instructions carefully :)
+def get_data_details(data:dict)->dict:
+    """
+    Parse Alpha Vantage time-series JSON and return:
+    {
+        "<SYMBOL>": {
+            "open": {mean, std, median, low, max},
+            "high": {mean, std, median, low, max},
+            "low": {mean, std, median, low, max},
+            "close": {mean, std, median, low, max},
+            "volume": {mean, std, median, low, max},
+        },
+        "count": <int>
+    }
+    """
+    # Extract ticker and time series data.
+    ticker = data["Meta Data"]["2. Symbol"]
+
+    time_series_key = next((k for k in data.keys() if "Time Series" in k), None)
+
+
+    time_series = data[time_series_key]
+
+    # Convert time series to DataFrame.
+    df_data = []
+    for timestamp, candle in time_series.items():
+        df_data.append(
+            {
+                "timestamp": timestamp,
+                "open": float(candle["1. open"]),
+                "high": float(candle["2. high"]),
+                "low": float(candle["3. low"]),
+                "close": float(candle["4. close"]),
+                "volume": float(candle["5. volume"]),
+            }
+        )
+
+    df = pd.DataFrame(df_data)
+
+    # Calculate statistics for each price type.
+    result: dict[str, dict] = {ticker: {}}
+
+    for col in ["open", "high", "low", "close", "volume"]:
+        result[ticker][col] = {
+            "mean": float(df[col].mean()),
+            "std": float(df[col].std()),
+            "median": float(df[col].median()),
+            "min": float(df[col].min()),
+            "max": float(df[col].max()),
+        }
+
+    result["count"] = len(df)
+
+    return result
+
+
+            
+   
+
+    
+
+
 
 # TODO 5
-# def get_standing(details:dict)->str:
-    # pass
+def get_standing(data:dict)->str:
+    open_stats = data['open']
+    high_stats = data['high']
+    low_stats = data['low']
+    close_stats = data['close']
+
+    price_range = high_stats['mean'] - low_stats['mean']
+    volatility = close_stats['std']
+    skew = close_stats['median'] - close_stats['mean']
+
+    # You can tune these thresholds however you like
+    if price_range > 10 and volatility > 5:
+        standing = "risky"
+    elif skew > 2:
+        standing = "improving"
+    elif skew < -2:
+        standing = "declining"
+    else:
+        standing = "stable"
+
+    return standing
+
+
+
+fetch_stock_data('params', 'https://www.alphavantage.co', 'query') 
