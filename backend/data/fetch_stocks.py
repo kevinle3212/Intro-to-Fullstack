@@ -39,14 +39,13 @@ Notes:
 - Designed for modular integration with fullstack backend pipelines.
 """
 
-import os
-from pprint import pprint
-from dotenv import load_dotenv
-import pandas as pd
 import requests
+import pandas as pd
+from pprint import pprint
+from backend.utils.support import get_secret
 
-load_dotenv()  # Loads variables from .env into the environment.
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+# Loads variables from .env into the environment.
+ALPHA_VANTAGE_API_KEY = get_secret("ALPHA_VANTAGE_API_KEY")
 
 
 def get_data_details(data: dict) -> dict:
@@ -102,15 +101,15 @@ def get_data_details(data: dict) -> dict:
 
     # Convert time series to DataFrame.
     df_data = []
-    for timestamp, candle in time_series.items():
+    for timestamp, info in time_series.items():
         df_data.append(
             {
                 "timestamp": timestamp,
-                "open": float(candle["1. open"]),
-                "high": float(candle["2. high"]),
-                "low": float(candle["3. low"]),
-                "close": float(candle["4. close"]),
-                "volume": float(candle["5. volume"]),
+                "open": float(info["1. open"]),
+                "high": float(info["2. high"]),
+                "low": float(info["3. low"]),
+                "close": float(info["4. close"]),
+                "volume": float(info["5. volume"]),
             }
         )
 
