@@ -1,13 +1,11 @@
 from dotenv import load_dotenv # pip install python-dotenv
 from os import getenv
 
-LOCAL_PATH_TO_SECRET = "Absolute/path/to/.env"
-
 class MissingSecretError(Exception):
     pass
 
 def get_secret(key:str):
-    load_dotenv(LOCAL_PATH_TO_SECRET)
+    load_dotenv()
     value = getenv(key, None)
     
     if not value:
