@@ -1,47 +1,116 @@
 """
-Module: 1 - fetch_stocks
+Module: fetch_stocks.py
+Path: backend/data/fetch_stocks.py
 Author: Oregon Software Consulting; Junior Software Engineer, Kevin Le
-Purpose: Analyze real-time stock data using Alpha Vantage API and pandas.
+Purpose: Fetch and analyze real-time stock market data from Alpha Vantage API.
 
-This module fetches intraday stock data from the Alpha Vantage API, transforms it into a structured
-pandas DataFrame, computes descriptive statistics (mean, std, median, min, max) for each price type,
-and classifies the stock's standing based on volatility, price range, and skewness.
+Overview:
+---------
+This module retrieves intraday stock price data (OHLCV: Open, High, Low, Close, Volume)
+from the Alpha Vantage API, processes it using pandas DataFrames, and computes statistical
+summaries to help evaluate stock performance and market conditions.
+
+The module transforms raw time-series stock data into structured statistical insights,
+including mean, standard deviation, median, minimum, and maximum values for each price
+metric. It also classifies stocks into one of four health categories based on volatility,
+price range, and price trend (skewness).
 
 Key Functions:
-- get_data_details(data: dict) -> dict:
-    Converts raw API response into statistical summaries for open, high, low, close, and volume.
+--------------
+1. get_data_details(data: dict) -> dict
+   - Parses Alpha Vantage API response containing timestamped OHLCV data.
+   - Converts string prices to floats and loads into pandas DataFrame.
+   - Calculates five statistical measures (mean, std, median, min, max) for each metric.
+   - Returns structured dictionary with ticker symbol as key.
 
-- get_standing(data: dict) -> str:
-    Evaluates stock health and returns one of four status labels: 'risky', 'improving', 'declining', 'stable'.
+2. get_standing(data: dict) -> str
+   - Analyzes stock health using three key metrics:
+     * Price range: Difference between average high and low (market volatility).
+     * Volatility: Standard deviation of closing prices (price stability).
+     * Skew: Difference between median and mean close (trend direction).
+   - Returns classification: 'risky', 'improving', 'declining', or 'stable'.
 
-- fetch_stock_data(params: str, base_url: str, endpoint: str) -> dict | None:
-    Sends a GET request to Alpha Vantage, parses the response, and returns structured statistics and standing.
+3. fetch_stock_data(params: str, base_url: str, endpoint: str) -> dict | None
+   - Main export function that orchestrates the entire data pipeline.
+   - Sends GET request to Alpha Vantage API with specified parameters.
+   - Handles HTTP errors (404, 403, 200) with appropriate error messages.
+   - Combines statistical details with standing classification.
+   - Returns None if any errors occur during fetching or processing.
 
 Usage:
-Run this module (without the '.py' extension) with:
+------
+Run this module directly from the command line:
     python3 -m backend.data.fetch_stocks
 
-Example:
-    >>> output = fetch_stock_data("function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&apikey=YOUR_API_KEY")
-    >>> print(output['IBM']['close']['mean'])
-    >>> print(output['standing'])
+Or import into another module:
+    from backend.data.fetch_stocks import fetch_stock_data
+    
+    data = fetch_stock_data(
+        "function=TIME_SERIES_INTRADAY&symbol=AAPL&interval=5min&apikey=YOUR_KEY"
+    )
+    print(data['AAPL']['close']['mean'])
+    print(data['standing'])
+
+Output Format:
+--------------
+{
+    'IBM': {
+        'open': {'mean': 215.34, 'std': 2.41, 'median': 215.20, 'min': 210.50, 'max': 220.10},
+        'high': {'mean': 216.12, 'std': 2.38, 'median': 216.00, 'min': 211.80, 'max': 221.50},
+        'low': {'mean': 214.56, 'std': 2.44, 'median': 214.40, 'min': 209.20, 'max': 219.30},
+        'close': {'mean': 215.78, 'std': 2.40, 'median': 215.65, 'min': 210.90, 'max': 220.80},
+        'volume': {'mean': 1250000, 'std': 450000, 'median': 1200000, 'min': 800000, 'max': 2500000},
+        'count': 100
+    },
+    'standing': 'stable'
+}
 
 Dependencies:
-- requests
-- pandas
-- pprint (For Debugging)
-- os
-- python-dotenv
+-------------
+- requests: HTTP library for making API calls.
+- pandas: Data analysis and manipulation library.
+- pprint: Pretty-print for debugging output.
+- python-dotenv: Load environment variables from .env file (via support.py).
+
+Environment Variables:
+----------------------
+ALPHA_VANTAGE_API_KEY: Your API key from Alpha Vantage (stored in .env file).
+
+API Documentation:
+------------------
+Alpha Vantage API: https://www.alphavantage.co/documentation/
+Free API Key: https://www.alphavantage.co/support/#api-key
 
 Notes:
-- API key is required and passed via query string.
-- Standard deviation uses sample std (ddof=1).
-- Designed for modular integration with fullstack backend pipelines.
+------
+- API requests are rate-limited by Alpha Vantage (5 calls/minute for free tier).
+- Intraday data is available in 1min, 5min, 15min, 30min, and 60min intervals.
+- 'outputsize=full' returns full trading day data; 'compact' returns latest 100 points.
+- Standard deviation calculated using pandas default (sample std with ddof=1).
+- Standing thresholds (10, 5, 2, -2) can be adjusted based on your risk tolerance.
+
+Error Handling:
+---------------
+- Returns None if HTTP request fails (404, 403, timeout, connection issues).
+- Raises KeyError if API response structure is unexpected.
+- Raises ValueError if price/volume data cannot be converted to float.
+- All errors are caught and logged to console for debugging.
+
+Example Trading Strategies:
+---------------------------
+- 'risky' stocks: High volatility and large price swings (day trading potential).
+- 'improving' stocks: Upward trend indicated by positive skew (buy signal).
+- 'declining' stocks: Downward trend indicated by negative skew (sell signal).
+- 'stable' stocks: Low volatility and balanced prices (long-term holding).
+
+Last Modified: 10/29/2025
+Version: 1.0.0
 """
 
+from pprint import pprint
 import requests
 import pandas as pd
-from pprint import pprint
+
 from backend.utils.support import get_secret
 
 # Loads variables from .env into the environment.
@@ -222,7 +291,6 @@ def fetch_stock_data(
             data: dict = (
                 response.json()
             )  # Get the content of the API. This should include the JSON files.
-            pprint(data)
 
             # Get the details and standings.
             details = get_data_details(data)
@@ -241,4 +309,4 @@ def fetch_stock_data(
 output = fetch_stock_data(
     "function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&outputsize=full&apikey={ALPHA_VANTAGE_API_KEY}"
 )
-print(output)
+pprint(output)
