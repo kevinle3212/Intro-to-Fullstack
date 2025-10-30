@@ -1,50 +1,494 @@
+"""
+Module: fetch_crypto.py
+Path: backend/data/fetch_crypto.py
+Author: Oregon Software Consulting; Junior Software Engineer, Kevin Le
+Purpose: Fetch and analyze historical cryptocurrency price data from CryptoCompare API.
 
-# _____________________________________ Module 2 _____________________________________ #
+Overview:
+---------
+This module retrieves historical daily cryptocurrency price data (OHLCV: Open, High, Low, 
+Close, Volume) from the CryptoCompare API and computes statistical summaries to help evaluate
+crypto performance and market conditions.
 
-import requests
+Similar to the stock data module (fetch_stocks.py), this module transforms raw time-series
+crypto data into structured statistical insights, including mean, standard deviation, median,
+minimum, and maximum values for each price metric. It also classifies cryptocurrencies into
+one of four health categories based on volatility, price range, and price trend (skewness).
+
+Key Functions:
+--------------
+1. calculate_stats(values: list) -> dict
+   - Helper function to calculate five statistical measures for any list of numbers.
+   - Returns dictionary with mean, std, median, min, and max.
+
+2. parse_data(raw_data: list) -> dict
+   - Extracts only the important OHLCV fields from API response.
+   - Calculates statistics for open, high, low, close, and volume.
+   - Adds count and standing classification.
+   - Returns structured dictionary ready for export.
+
+3. get_standing(data: dict) -> str
+   - Analyzes crypto health using three key metrics:
+     * Price range: Difference between average high and low (market volatility).
+     * Volatility: Standard deviation of closing prices (price stability).
+     * Skew: Difference between median and mean close (trend direction).
+   - Returns classification: 'risky', 'improving', 'declining', or 'stable'.
+
+4. fetch_crypto_data(symbol: str, days: int) -> dict | None
+   - Main export function that orchestrates the entire data pipeline.
+   - Sends GET request to CryptoCompare API with specified parameters.
+   - Handles HTTP errors (404, 403, 500, 200) with appropriate error messages.
+   - Parses response to extract only relevant price data.
+   - Returns structured statistics identical to fetch_stock_data format.
+   - Returns None if any errors occur during fetching or processing.
+
+Usage:
+------
+Run this module directly from the command line:
+    python3 -m backend.data.fetch_crypto
+
+Or import into another module:
+    from backend.data.fetch_crypto import fetch_crypto_data
+    
+    data = fetch_crypto_data("BTC", days=30)
+    print(data['BTC']['close']['mean'])
+    print(data['standing'])
+
+Output Format:
+--------------
+{
+    'BTC': {
+        'open': {'mean': 78561.62, 'std': 2401.50, 'median': 78200.00, 'min': 75000.00, 'max': 82000.00},
+        'high': {'mean': 83608.26, 'std': 2380.00, 'median': 83500.00, 'min': 76000.00, 'max': 88000.00},
+        'low': {'mean': 76581.52, 'std': 2440.00, 'median': 76400.00, 'min': 72000.00, 'max': 81000.00},
+        'close': {'mean': 82919.47, 'std': 2400.00, 'median': 82800.00, 'min': 75500.00, 'max': 87000.00},
+        'volume': {'mean': 3744822903.84, 'std': 450000000, 'median': 3700000000, 'min': 2000000000, 'max': 5000000000},
+        'count': 30
+    },
+    'standing': 'stable'
+}
+
+Dependencies:
+-------------
+- requests: HTTP library for making API calls.
+- statistics: Built-in Python module for statistical calculations.
+- pprint: Pretty-print for debugging output.
+- python-dotenv: Load environment variables from .env file (via support.py).
+
+Environment Variables:
+----------------------
+COINDESK_API_KEY: Your API key from CryptoCompare (stored in .env file).
+
+API Documentation:
+------------------
+CryptoCompare API: https://min-api.cryptocompare.com/documentation
+Example Request: https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsym=USD&limit=30
+
+Notes:
+------
+- API returns nested structure: data -> Data -> Data (array of daily records).
+- Each record contains OHLCV data plus conversion metadata.
+- We only extract: open, high, low, close, volumeto (ignore volumefrom, time, etc.).
+- Standard deviation calculated using statistics.stdev (sample std).
+- Standing thresholds (10, 5, 2, -2) can be adjusted based on crypto volatility.
+
+Error Handling:
+---------------
+- Returns None if HTTP request fails (404, 403, 500, timeout, connection issues).
+- Handles empty or malformed API responses.
+- Validates data structure before processing.
+- All errors are caught and logged to console for debugging.
+
+Differences from fetch_stocks.py:
+----------------------------------
+- Uses statistics module instead of pandas (simpler, no DataFrame needed).
+- API returns daily data instead of intraday (5min intervals).
+- Different API structure (nested Data.Data vs Time Series).
+- Volume uses 'volumeto' (USD volume) instead of 'volume' (shares traded).
+
+Last Modified: 10/29/2025
+Version: 1.0.0
+"""
+
 from pprint import pprint
+import statistics
+import requests
 
-def fetch_crypto_data(symbol, days=30):
-    '''
-    Sample:
-    https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsym=USD&limit=30
+from backend.utils.support import get_secret
 
-    Full Documentation:
+
+def calculate_stats(values):
+    """
+    Calculate statistical measures for a list of numbers.
     
-    https://developers.coindesk.com/documentation/legacy/Price/SingleSymbolPriceEndpoint
+    This helper function computes five key statistics that help us understand
+    the distribution and behavior of price data.
     
-    Key:
+    Args:
+        values: List of numbers (prices or volumes) to analyze.
     
-    ---
+    Returns:
+        Dictionary with five statistical measures:
+        {
+            'mean': Average value,
+            'std': Standard deviation (measure of volatility),
+            'median': Middle value (50th percentile),
+            'min': Lowest value,
+            'max': Highest value
+        }
     
+    Raises:
+        ValueError: If values list is empty.
+        statistics.StatisticsError: If std cannot be calculated (need at least 2 values).
     
-    ADD ENOUGH ERROR HANDLING (try-except, if None checks, etc...)!
-    
-    '''
-    url = 'https://min-api.cryptocompare.com/data/v2/histoday'
-    
-    key = ''
-    
-    params = {
-        'fsym': symbol,
-        'tsym': 'usd',
-        'limit': days  # number of days
+    Example:
+        >>> prices = [100, 105, 98, 102, 110]
+        >>> stats = calculate_stats(prices)
+        >>> print(stats['mean'])
+        103.0
+    """
+    if not values:
+        raise ValueError("Cannot calculate stats on empty list.")
+
+    return {
+        "mean": float(statistics.mean(values)),
+        "std": float(statistics.stdev(values)),
+        "median": float(statistics.median(values)),
+        "min": float(min(values)),
+        "max": float(max(values)),
     }
-    headers = {
-        'authorization': f'Apikey {key}'
+
+
+def get_standing(data):
+    """
+    Determine if a crypto is risky, improving, declining, or stable.
+    
+    This function evaluates crypto health based on three calculated metrics:
+    price range, volatility, and skewness. It assigns one of four status 
+    categories: 'risky', 'improving', 'declining', or 'stable'.
+    
+    Args:
+        data: Dictionary with 'high', 'low', and 'close' statistics.
+              Each must contain 'mean', 'median', and 'std' keys.
+    
+    Returns:
+        str: One of four status values:
+            - 'risky': Price range > 10 AND volatility > 5.
+            - 'improving': Price skew (median - mean) > 2.
+            - 'declining': Price skew (median - mean) < -2.
+            - 'stable': None of the above conditions met.
+    
+    Raises:
+        KeyError: If expected statistical keys are missing from the input
+    
+    Example:
+        >>> data = fetch_crypto_data("BTC")
+        >>> print(data['standing'])
+        'stable'
+    
+    Notes:
+        - Price range = average high - average low (measures price movement span).
+        - Volatility = standard deviation of closing prices (measures price variation).
+        - Skew = median closing price - mean closing price (indicates trend direction).
+        - Thresholds (10, 5, 2, -2) can be tuned for crypto's higher volatility.
+        - Positive skew suggests upward trend, negative suggests downward.
+    """
+
+    try:
+        high_stats = data["high"]
+        low_stats = data["low"]
+        close_stats = data["close"]
+
+        price_range = high_stats["mean"] - low_stats["mean"]
+        volatility = close_stats["std"]
+        skew = close_stats["median"] - close_stats["mean"]
+
+        # You can tune these thresholds however you like
+        if price_range > 10 and volatility > 5:
+            standing = "risky"
+        elif skew > 2:
+            standing = "improving"
+        elif skew < -2:
+            standing = "declining"
+        else:
+            standing = "stable"
+
+        return standing
+
+    except KeyError as e:
+        raise ValueError(f"Missing required data for standing calculation: {e}") from e
+
+def parse_data(raw_data):
+    """
+    Parse raw crypto API data into organized statistics.
+    
+    This function performs the critical task of data cleaning and transformation:
+    1. Extracts only the OHLCV fields we care about (ignoring metadata).
+    2. Converts all string/numeric values to floats for consistency.
+    3. Calculates five statistics for each price field.
+    4. Counts the total number of data points.
+    5. Determines the crypto's standing classification.
+    
+    Args:
+        raw_data: List of daily crypto records from CryptoCompare API.
+                  Each record is a dictionary containing:
+                  - 'open': Opening price.
+                  - 'high': Highest price of the day.
+                  - 'low': Lowest price of the day.
+                  - 'close': Closing price.
+                  - 'volumeto': Volume traded in USD (we use this, not volumefrom).
+                  - Other fields like 'time', 'conversionSymbol' (ignored).
+    
+    Returns:
+        Dictionary with this structure:
+        {
+            'open': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+            'high': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+            'low': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+            'close': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+            'volume': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+            'count': int,
+            'standing': str
+        }
+    
+    Raises:
+        ValueError: If data is empty or missing required fields.
+        KeyError: If expected OHLCV fields are not in the data.
+        TypeError: If values cannot be converted to float.
+    
+    Example:
+        >>> raw = [{'open': 100, 'high': 105, 'low': 98, 'close': 102, 'volumeto': 1000000}, ...]
+        >>> parsed = parse_data(raw)
+        >>> print(parsed['close']['mean'])
+        102.0
+    
+    Notes:
+        - This is the "parsing" step - cleaning and structuring messy data.
+        - We ignore fields like 'time', 'conversionSymbol', 'conversionType', 'volumefrom'.
+        - Volume uses 'volumeto' (USD value) which is more meaningful than 'volumefrom'.
+        - All prices are converted to float for consistent statistical calculations.
+    """
+    if not raw_data:
+        raise ValueError("No data to parse - received empty list!")
+
+    try:
+        opens = [float(entry["open"]) for entry in raw_data]
+        highs = [float(entry["high"]) for entry in raw_data]
+        lows = [float(entry["low"]) for entry in raw_data]
+        closes = [float(entry["close"]) for entry in raw_data]
+        volumetos = [float(entry["volumeto"]) for entry in raw_data]
+
+    except KeyError as e:
+        raise KeyError(f"Missing expected field in crypto data: {e}") from e
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Could not convert price data to float: {e}") from e
+
+    # Calculate statistics for each price field using our helper function.
+    result = {
+        "open": calculate_stats(opens),
+        "high": calculate_stats(highs),
+        "low": calculate_stats(lows),
+        "close": calculate_stats(closes),
+        "volume": calculate_stats(volumetos),
+        "count": len(raw_data),
     }
-    
-    response = requests.get(url, params=params, headers=headers)
-    status_code = response.status_code
-    
-    # TODO: Status Code Validation
-    # if eveything is in order, uncomment:
-    # data = response.json()
-    
-    # parsed_data = parse_data()
-    
+
+    # Determine the crypto's standing based on the statistics.
+    result["standing"] = get_standing(result)
+
     return result
 
 
-def parse_data(data:dict):
-    pass
+def fetch_crypto_data(symbol, days=30):
+    """
+    Fetch cryptocurrency data from CryptoCompare API and return statistics.
+    
+    This is the main export function that orchestrates the entire data pipeline:
+    1. Builds the API request with proper authentication.
+    2. Makes HTTP GET request to CryptoCompare.
+    3. Handles all possible HTTP errors (404, 403, 500, etc.).
+    4. Validates the API response structure.
+    5. Parses the nested response to extract price records.
+    6. Calculates statistics using parse_data().
+    7. Returns data in the same format as fetch_stock_data().
+    
+    Args:
+        symbol: Crypto symbol (e.g., 'BTC', 'ETH', 'SOL') - case insensitive
+        days: Number of days of historical data to fetch (default: 30)
+              Valid range: 1-2000 days
+    
+    Returns:
+        Dictionary in the format (structurally identical to fetch_stock_data):
+        {
+            'BTC': {  # The symbol in uppercase
+                'open': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'high': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'low': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'close': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'volume': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'count': int
+            },
+            'standing': str  # 'risky', 'improving', 'declining', or 'stable'
+        }
+        
+        Returns None if any error occurs.
+    
+    Raises:
+        Does not raise exceptions - catches all errors and returns None.
+        Prints error messages to console for debugging.
+    
+    Example:
+        >>> data = fetch_crypto_data("BTC", days=30)
+        >>> if data:
+        ...     print(f"BTC average close: ${data['BTC']['close']['mean']:.2f}")
+        ...     print(f"Market status: {data['standing']}")
+        BTC average close: $82919.47
+        Market status: stable
+    
+    API Structure:
+        Request URL: https://min-api.cryptocompare.com/data/v2/histoday
+        Parameters:
+            - fsym: From symbol (the crypto, e.g., BTC).
+            - tsym: To symbol (the fiat currency, e.g., USD).
+            - limit: Number of days to fetch.
+        Response Structure:
+            {
+                "Response": "Success",
+                "Data": {
+                    "Data": [
+                        {
+                            "time": 1741651200,
+                            "open": 78561.62,
+                            "high": 83608.26,
+                            "low": 76581.52,
+                            "close": 82919.47,
+                            "volumefrom": 46456.32,
+                            "volumeto": 3744822903.84,
+                            "conversionType": "direct",
+                            "conversionSymbol": ""
+                        },
+                        ...
+                    ]
+                }
+            }
+    
+    Error Handling:
+        - Network errors: Timeout, ConnectionError.
+        - HTTP errors: 404 (Not Found), 403 (Forbidden), 500 (Server Error).
+        - API errors: Invalid symbol, rate limiting.
+        - Data errors: Empty response, missing fields, invalid structure.
+    
+    Notes:
+        - CryptoCompare API has rate limits (check their documentation).
+        - API key is required and loaded from .env file.
+        - Response is nested: data["Data"]["Data"] contains the actual records.
+        - This function matches fetch_stock_data() output format for consistency.
+    """
+
+    try:
+        base_url = "https://min-api.cryptocompare.com"
+        endpoint = "data/v2/histoday"
+        api_key = get_secret("COINDESK_API_KEY")
+
+        if not api_key:
+            raise ValueError("API key not found - check your .env file for 'COINDESK_API_KEY'!")
+
+        params = {
+            "fsym": symbol.upper(),
+            "tsym": "USD",
+            "limit": days
+        }
+
+        headers = {"authorization": f"Apikey {api_key}"}
+
+        request_uri = f"{base_url}/{endpoint}"
+
+        print(f"Fetching {days} days of data for {symbol.upper()}...")
+        response = requests.get(request_uri, params=params, headers=headers, timeout=10)
+
+        if response.status_code == 404:  # 404 Not Found
+            raise requests.HTTPError(
+                "404 Not Found - The API endpoint was not found. Check the URL."
+            )
+
+        if response.status_code == 403:  # 403 Forbidden
+            raise requests.HTTPError(
+                "403 Forbidden - Access denied. Check your API key spelling and permissions."
+            )
+
+        if response.status_code == 500:  # 500 Internal Server Error
+            raise requests.HTTPError(
+                "500 Internal Server Error - The API server encountered an error. Try again later."
+            )
+
+        if response.status_code == 200:  # 200 OK - Success!
+            print("Yay! The connection works!\n")
+
+            # Parse the JSON response.
+            data = response.json()
+
+            if not data:
+                raise ValueError("API returned empty response!")
+
+            # Check if the API returned an error message.
+            if data.get("Response") == "Error":
+                error_message = data.get("Message", "Unknown API error")
+                raise ValueError(f"API Error: {error_message}")
+
+            # Extract the actual price records (parsing the nested structure).
+            # The response structure is: data -> Data -> Data.
+            try:
+                raw_data = data["Data"]["Data"]
+            except KeyError as e:
+                raise KeyError(
+                    f"Unexpected API response structure - missing expected field: {e}. "
+                    f"Received keys: {list(data.keys())}."
+                ) from e
+
+            if not raw_data:
+                raise ValueError(f"No historical data available for {symbol.upper()}.")
+
+            # Parse the data and calculate all statistics.
+            details = parse_data(raw_data)
+
+            # Extract standing from details (it's inside the parsed data).
+            standing = details["standing"]
+
+            # Build result matching fetch_stock_data structure.
+            # Standing should be at root level, same as fetch_stock_data.
+            result = {symbol.upper(): details, "standing": standing}
+
+            return result
+
+        else:
+            raise requests.HTTPError(
+                f"Request failed with status code {response.status_code}. Reason: {response.reason}"
+            )
+
+    except requests.exceptions.Timeout:
+        print("Error: Request timed out after 10 seconds. Check your internet connection.")
+        return None
+
+    except requests.exceptions.ConnectionError:
+        print("Error: Could not connect to API. Check your internet connection.")
+        return None
+
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error: {e}")
+        return None
+
+    except requests.exceptions.RequestException as e:
+        print(f"There was an issue with fetching the data. Error:\n{e}")
+        return None
+
+    except (ValueError, KeyError) as e:
+        print(f"Data processing error: {e}")
+        return None
+
+    # Catch the most likely unexpected runtime errors explicitly.
+    except (TypeError, AttributeError, RuntimeError) as e:
+        print(f"Unexpected processing error occurred: {type(e).__name__} - {e}")
+        return None
+
+fetched_data = fetch_crypto_data("BTC")
+pprint(fetched_data)
