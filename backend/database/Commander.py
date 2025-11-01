@@ -22,7 +22,7 @@ class Commander(Connection):
 
         # vvv Hardcode This Attributes vvv #
         
-        self.stock_parameters = ''
+        self.stock_parameters = 'params="/?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=60min&outputsize=full"'
         
         self.stock_data:dict = self.__load_stocks()
 
@@ -30,7 +30,7 @@ class Commander(Connection):
 
         # vvv Hardcode These Attributes vvv #
         
-        self.crypto_ticker = ''
+        self.crypto_ticker = 'BTC' 
         self.crypto_limit = None
         
         self.crypto_data:dict = self.__load_crypto()
