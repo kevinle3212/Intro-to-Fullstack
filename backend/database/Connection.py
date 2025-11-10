@@ -218,7 +218,7 @@ class Connection:
         except Error as e:
             return self.handle_db_error(e)
 
-    def query_submit(self, table_name: str, **kwargs: dict[str, Any]) -> int:
+    def query_submit(self, table_name: str, **kwargs: dict[str, StockAndCryptoDatabaseFilter]) -> int:
         """
         Insert statistical metrics for one or more tickers into the database.
         
