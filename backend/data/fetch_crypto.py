@@ -106,8 +106,8 @@ Differences from fetch_stocks.py:
 - Different API structure (nested Data.Data vs Time Series).
 - Volume uses 'volumeto' (USD volume) instead of 'volume' (shares traded).
 
-Last Modified: 10/29/2025
-Version: 1.0.0
+Author: Kevin Le
+Last Modified: November 9, 2025
 """
 
 from pprint import pprint
