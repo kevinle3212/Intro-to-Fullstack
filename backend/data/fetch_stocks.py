@@ -262,17 +262,17 @@ def get_standing(data: dict) -> str:
 
 
 def fetch_stock_data(
-    params: str, base_url: str = "https://www.alphavantage.co", endpoint: str = "query"
+    params: str, ticker: str, base_url: str = "https://www.alphavantage.co", endpoint: str = "query"
 ):
     """
     URL Sample:
-    https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=IBM&outputsize=full&apikey=demo
+    https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&outputsize=full&apikey=demo&symbol=IBM
 
     Full Documentation: https://www.alphavantage.co/documentation/
     """
 
     result = {}
-    request_uri = f"{base_url}/{endpoint}?{params}"
+    request_uri = f"{base_url}/{endpoint}?{params}&symbol={ticker}"
 
     try:
         response = requests.get(request_uri, timeout=10)
@@ -281,11 +281,13 @@ def fetch_stock_data(
             raise requests.HTTPError(
                 "The request was not found. Check and try again."
             )
-        elif response.status_code == 403:  # 403 Forbidden.
+
+        if response.status_code == 403:  # 403 Forbidden.
             raise requests.HTTPError(
                 "Access was denied to you. Ensure exact API key spelling and try again."
             )
-        elif response.status_code == 200:  # 200 OK.
+
+        if response.status_code == 200:  # 200 OK.
             print("Yay! The connection works!\n")
 
             data: dict = (
@@ -305,20 +307,6 @@ def fetch_stock_data(
         print(f"There was an issue with fetching the data. Error:\n{error}")
         return None
 
-
-def print_result(name: str):
-    """
-    Helper function to print the fetched stock data for a given ticker symbol.
-
-    Args:
-        name (str): The stock ticker symbol to fetch data for.
-
-    Returns:
-        dict | None: The fetched stock data dictionary or None if an error occurred.
-    """
-
-    return fetch_stock_data(
-          f"function=TIME_SERIES_INTRADAY&symbol={name}&interval=5min&outputsize=full&apikey={ALPHA_VANTAGE_API_KEY}"
-      )
-
-pprint(print_result("IBM"))
+pprint(fetch_stock_data(
+          f"function=TIME_SERIES_INTRADAY&interval=5min&outputsize=full&apikey={ALPHA_VANTAGE_API_KEY}",
+          "IBM"))
