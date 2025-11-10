@@ -288,7 +288,7 @@ def fetch_stock_data(
             )
 
         if response.status_code == 200:  # 200 OK.
-            print("Yay! The connection works!\n")
+            pprint("Yay! The connection works!\n")
 
             data: dict = (
                 response.json()
@@ -306,7 +306,3 @@ def fetch_stock_data(
     except requests.RequestException as error:
         print(f"There was an issue with fetching the data. Error:\n{error}")
         return None
-
-pprint(fetch_stock_data(
-          f"function=TIME_SERIES_INTRADAY&interval=5min&outputsize=full&apikey={ALPHA_VANTAGE_API_KEY}",
-          "IBM"))
