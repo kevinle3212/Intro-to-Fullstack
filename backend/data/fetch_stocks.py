@@ -103,8 +103,8 @@ Example Trading Strategies:
 - 'declining' stocks: Downward trend indicated by negative skew (sell signal).
 - 'stable' stocks: Low volatility and balanced prices (long-term holding).
 
-Last Modified: 10/29/2025
-Version: 1.0.0
+Author: Kevin Le
+Last Modified: November 9, 2025
 """
 
 from pprint import pprint
@@ -306,7 +306,19 @@ def fetch_stock_data(
         return None
 
 
-output = fetch_stock_data(
-    "function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&outputsize=full&apikey={ALPHA_VANTAGE_API_KEY}"
-)
-pprint(output)
+def print_result(name: str):
+    """
+    Helper function to print the fetched stock data for a given ticker symbol.
+
+    Args:
+        name (str): The stock ticker symbol to fetch data for.
+
+    Returns:
+        dict | None: The fetched stock data dictionary or None if an error occurred.
+    """
+
+    return fetch_stock_data(
+          f"function=TIME_SERIES_INTRADAY&symbol={name}&interval=5min&outputsize=full&apikey={ALPHA_VANTAGE_API_KEY}"
+      )
+
+pprint(print_result("IBM"))
