@@ -11,7 +11,7 @@ class Connection:
         self.host = 'localhost'
         # TODO: Read module_3.md instructions to set these up according to what you put
         self.user = 'root'
-        self.password = 'Shanny.139'
+        self.password = 'Shanny123'
         self.database = 'db'
         
         self.status = 'inactive'
@@ -229,3 +229,15 @@ class Connection:
         else:
             print("Database deletion cancelled.")
 
+
+if __name__ == "__main__":
+    # con = Connection()
+    # print("Connection Status:", con.status)
+    # con.query_create_table("Stock")
+    # con.query_create_table("Crypto")
+    
+    # print("Tables in database:", con.show_tables())
+
+    # con.query_delete_table("Stock")
+    # con.query_delete_table("Crypto")
+    # print("Tables in database after deletion:", con.show_tables())
