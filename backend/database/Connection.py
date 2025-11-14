@@ -1,6 +1,6 @@
 
 # _____________________________________ Module 3 _____________________________________ #
-
+from pprint import pprint
 import mysql.connector
 # pip install mysql-connector-python
 
@@ -9,13 +9,13 @@ class Connection:
         
         self.host = 'localhost'
         # TODO: Read module_3.md instructions to set these up according to what you put
-        self.user = ''
-        self.password = ''
-        self.database = ''
+        self.user = 'root'
+        self.password = 'Shanny.139'
+        self.database = 'IntroFullstack'
         
         self.status = 'inactive'
         self.conn = self.__init_conn()
-        self.cursor = self.__init_conn()
+        self.cursor = self.__init_cursor()
 
     # ___________________ Connection Methods ___________________ #
     
@@ -60,7 +60,7 @@ class Connection:
                 count INT
             )
             """
-            
+             
             self.cursor.execute(query)
             
             self.conn.commit()
@@ -71,7 +71,7 @@ class Connection:
             
             return 'failure'
     
-    def query_submit(self) -> int:
+    def query_submit(self, table:str, data: dict) -> int:
         '''
         Arguably the most important function. This could go perfect or it can cause lots of issues.
         Enters a record on a table.
@@ -82,25 +82,70 @@ class Connection:
         You don't know what type of data to expect! 
         What could you do to upload dynamic data? (e.g. **kwargs, dictionary, etc.. (?))
         '''
-        pass # TODO
+        
+        # Extract Data from dict to be used in query
+        columns = ", ".join(data.keys())
+        values = tuple(data.values())
+        placeholders = ", ".join(["%s"] * len(values))
 
-    def query_extract(self) -> dict:
+        try:
+            query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+            self.cursor.execute(query, values)
+
+            # Auto-increment ID
+            new_id = self.cursor.lastrowid
+
+            self.conn.commit()
+
+            return 201
+        except mysql.connector.Error as e:
+            return 400
+    
+    def query_extract(self, query:dict) -> dict:
         '''
         Extract a record from a table. Allow for OPTIONAL filtering conditions.
         '''
         pass # TODO
     
-    def get_table_data(self) -> dict:
+    def get_table_data(self, name:str) -> dict[dict]:
         '''
         Returns ALL of the information contained in a table.
         '''
-        pass # TODO
+        try:
+            query = f"DESCRIBE {name};"
+             
+            self.cursor.execute(query)
+            data = {} 
+            for row in self.cursor.fetchall():
+                data[row[0]] = {
+                    "type" : row[1],
+                    "NULL": row[2],
+                    "key": row[3],
+                    "default": row[4],
+                    "extra": row[5]
+                    }
+                
+            return data
+            
+        except mysql.connector.Error:
+            
+            return 'failure'
         
     def show_tables(self) -> list:
         '''
         Returns a list of all table names in the data base
         '''
-        pass # TODO
+        try:
+            query = f"SHOW TABLES;"
+             
+            self.cursor.execute(query)
+            
+            tables = [row[0] for row in self.cursor.fetchall()]
+            return tables
+            
+        except mysql.connector.Error:
+            
+            return 'failure'
     
     # __________________ Custom Query __________________ #
     
@@ -112,23 +157,73 @@ class Connection:
     
     # ___________________ Danger Zone ___________________ #
     
-    def query_delete_table(self):
+    def query_delete_table(self, name: str):
         '''
         Deletes a specified table. Again, allow for OPTIONAL filtering conditions. 
         '''
-        pass # TODO
 
+        try:
+            query = f"DROP TABLE {name};"
+            self.cursor.execute(query)
+            return "sucsess"
+        
+        except mysql.connector.Error:
+            return "Failure"
+        
     def query_delete_database(self):
-        
-        # TODO
-        
-        ... # Logic Here #
-        
+        """
+        Deleted database
+        """        
         user_input = input(f"Are you certain you want to delete {self.database} database? (Y/N)") # PLACEHOLDER layer of security
         
-        if user_input == '':
-            pass
-        elif '':
-            pass
-        ...    
+        if user_input.strip().lower() == "y":
+            try:
+                query = f"DROP DATABASE {self.database}"
+                self.cursor.execute(query)
+                self.conn.commit()
+                return f"Deleted Data Base: {self.database}"
+
+            except mysql.connector.Error:
+                return "Failure" 
+        else:
+            return f"Quiting db: {self.database} Deletion.."
+    
+if __name__ == "__main__":
+    con = Connection()
+    print(f"Connection Status: {con.status}")
+
+    print(f"Stock Table Dropped: {con.query_delete_table('Stocks')}")
+    print(f"Crypto Table Dropped: {con.query_delete_table('Crypto')}")
+    print("Tables Dropped")
+    print(con.show_tables())
+        
+    print(f"Stock Table Creation: {con.query_create_table('Stocks')}")
+    print(f"Crypto Table Creation: {con.query_create_table('Crypto')}")
+    print("Tables Made")
+    
+    data = {
+    "ticker": "BTC",
+    "metric": "close",
+    "mean": 185.2,
+    "median": 184.9,
+    "std": 1.1,
+    "low": 182.0,
+    "max": 188.5,
+    "count": 30}
+    
+    print(f"query_submit(self, table:str, data: dict): {con.query_submit('Crypto', data)}")
+    
+    data = {
+    "ticker": "AAPL",
+    "metric": "close",
+    "mean": 185.2,
+    "median": 184.9,
+    "std": 1.1,
+    "low": 182.0,
+    "max": 188.5,
+    "count": 30}
+    
+    print(f"query_submit(self, table:str, data: dict): {con.query_submit('Stocks', data)}")
+    
+    print(con.show_tables())
     
