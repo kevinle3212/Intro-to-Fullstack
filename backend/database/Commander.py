@@ -59,7 +59,7 @@ class Commander(Connection):
 
             for metric, stats in metrics.items():
                 status = self.query_submit(
-                    ...
+                    table="Stocks", query={}
                 )
                 
                 if status != 201:

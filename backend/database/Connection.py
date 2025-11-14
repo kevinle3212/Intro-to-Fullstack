@@ -2,6 +2,8 @@
 # _____________________________________ Module 3 _____________________________________ #
 from pprint import pprint
 import mysql.connector
+import numpy as np
+import random
 # pip install mysql-connector-python
 
 class Connection:
@@ -71,7 +73,7 @@ class Connection:
             
             return 'failure'
     
-    def query_submit(self, table:str, data: dict) -> int:
+    def query_submit(self, table:str, query: dict) -> int:
         '''
         Arguably the most important function. This could go perfect or it can cause lots of issues.
         Enters a record on a table.
@@ -101,11 +103,21 @@ class Connection:
         except mysql.connector.Error as e:
             return 400
     
-    def query_extract(self, query:dict) -> dict:
+    def query_extract(self, table:str=None, query:str=None) -> dict:
         '''
         Extract a record from a table. Allow for OPTIONAL filtering conditions.
         '''
-        pass # TODO
+        
+        if query == None:
+            query = f"Select * FROM {table}"
+                
+        try:
+            self.cursor.execute(query)
+            return self.cursor.fetchall()
+            
+        except mysql.connector.Error:
+            
+            return 'failure'
     
     def get_table_data(self, name:str) -> dict[dict]:
         '''
@@ -147,13 +159,7 @@ class Connection:
             
             return 'failure'
     
-    # __________________ Custom Query __________________ #
-    
-    def custom_query(self, query:str):
-        '''
-        Creates a custom query for potential user use.
-        '''
-        pass # TODO
+
     
     # ___________________ Danger Zone ___________________ #
     
@@ -212,18 +218,25 @@ if __name__ == "__main__":
     "count": 30}
     
     print(f"query_submit(self, table:str, data: dict): {con.query_submit('Crypto', data)}")
+   
+    for i in range(250): 
+        data = {
+        "ticker": random.choice(["APPL", "SPY500", "AWS"]),
+        "metric": random.choice(["CLOSE", "OPEN", "LOW", "HIGH "]),
+        "mean": np.random.randint(0,2550),
+        "median": np.random.randint(0,2550),
+        "std": np.random.randint(0,2550),
+        "low": np.random.randint(0,2550),
+        "max": np.random.randint(0,2550),
+        "count": np.random.randint(0,2550)
+        }
+
+        print(f"query_submit(self, table:str, data: dict): {con.query_submit('Stocks', data)}")
     
-    data = {
-    "ticker": "AAPL",
-    "metric": "close",
-    "mean": 185.2,
-    "median": 184.9,
-    "std": 1.1,
-    "low": 182.0,
-    "max": 188.5,
-    "count": 30}
+    for i in con.query_extract("Stocks", query="SELECT * FROM Stocks WHERE ticker like 'AWS' LIMIT 10;"):
+        print(i)
     
-    print(f"query_submit(self, table:str, data: dict): {con.query_submit('Stocks', data)}")
+    
     
     print(con.show_tables())
     
