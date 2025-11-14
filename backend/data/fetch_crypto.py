@@ -22,7 +22,8 @@ Key Functions:
    - Returns dictionary with mean, std, median, min, and max.
 
 2. parse_data(raw_data: list) -> dict
-   - Extracts only the important OHLCV fields from API response.
+   - Extracts OHLCV fields and timestamps from API response.
+   - Creates list of data points with timestamps for each daily record.
    - Calculates statistics for open, high, low, close, and volume.
    - Adds count and standing classification.
    - Returns structured dictionary ready for export.
@@ -38,8 +39,8 @@ Key Functions:
    - Main export function that orchestrates the entire data pipeline.
    - Sends GET request to CryptoCompare API with specified parameters.
    - Handles HTTP errors (404, 403, 500, 200) with appropriate error messages.
-   - Parses response to extract only relevant price data.
-   - Returns structured statistics identical to fetch_stock_data format.
+   - Parses response to extract timestamped price data.
+   - Returns structured statistics with individual data points.
    - Returns None if any errors occur during fetching or processing.
 
 Usage:
@@ -52,12 +53,24 @@ Or import into another module:
     
     data = fetch_crypto_data("BTC", days=30)
     print(data['BTC']['close']['mean'])
+    print(data['BTC']['data_points'][0])
     print(data['standing'])
 
 Output Format:
 --------------
 {
     'BTC': {
+        'data_points': [
+            {
+                'timestamp': '11-14-2025 00:00',
+                'open': 78561.62,
+                'high': 83608.26,
+                'low': 76581.52,
+                'close': 82919.47,
+                'volume': 3744822903.84
+            },
+            ...
+        ],
         'open': {'mean': 78561.62, 'std': 2401.50, 'median': 78200.00, 'min': 75000.00, 'max': 82000.00},
         'high': {'mean': 83608.26, 'std': 2380.00, 'median': 83500.00, 'min': 76000.00, 'max': 88000.00},
         'low': {'mean': 76581.52, 'std': 2440.00, 'median': 76400.00, 'min': 72000.00, 'max': 81000.00},
@@ -72,6 +85,7 @@ Dependencies:
 -------------
 - requests: HTTP library for making API calls.
 - statistics: Built-in Python module for statistical calculations.
+- datetime: Built-in Python module for timestamp conversions.
 - pprint: Pretty-print for debugging output.
 - python-dotenv: Load environment variables from .env file (via support.py).
 
@@ -87,8 +101,9 @@ Example Request: https://min-api.cryptocompare.com/data/v2/histoday?fsym=BTC&tsy
 Notes:
 ------
 - API returns nested structure: data -> Data -> Data (array of daily records).
-- Each record contains OHLCV data plus conversion metadata.
-- We only extract: open, high, low, close, volumeto (ignore volumefrom, time, etc.).
+- Each record contains OHLCV data, Unix timestamp, and conversion metadata.
+- Timestamps are converted from Unix format to MM-DD-YYYY HH:MM format.
+- We extract: open, high, low, close, volumeto, and time (ignore volumefrom, conversionSymbol, etc.).
 - Standard deviation calculated using statistics.stdev (sample std).
 - Standing thresholds (10, 5, 2, -2) can be adjusted based on crypto volatility.
 
@@ -105,12 +120,14 @@ Differences from fetch_stocks.py:
 - API returns daily data instead of intraday (5min intervals).
 - Different API structure (nested Data.Data vs Time Series).
 - Volume uses 'volumeto' (USD volume) instead of 'volume' (shares traded).
+- Includes timestamped data points for each day in addition to statistics.
 
 Author: Kevin Le
-Last Modified: November 9, 2025
+Last Modified: November 14, 2025
 """
 
 from pprint import pprint
+import datetime
 import statistics
 import requests
 
@@ -220,71 +237,110 @@ def get_standing(data):
 
 def parse_data(raw_data):
     """
-    Parse raw crypto API data into organized statistics.
+    Parse raw crypto API data into organized statistics with timestamped data points.
     
     This function performs the critical task of data cleaning and transformation:
-    1. Extracts only the OHLCV fields we care about (ignoring metadata).
-    2. Converts all string/numeric values to floats for consistency.
-    3. Calculates five statistics for each price field.
-    4. Counts the total number of data points.
-    5. Determines the crypto's standing classification.
+    1. Converts Unix timestamps to human-readable MM-DD-YYYY HH:MM format.
+    2. Extracts OHLCV fields for each daily record with its timestamp.
+    3. Creates a list of complete data points (timestamp + all prices).
+    4. Converts all string/numeric values to floats for consistency.
+    5. Calculates five statistics for each price field.
+    6. Counts the total number of data points.
+    7. Determines the crypto's standing classification.
     
     Args:
-        raw_data: List of daily crypto records from CryptoCompare API.
-                  Each record is a dictionary containing:
-                  - 'open': Opening price.
-                  - 'high': Highest price of the day.
-                  - 'low': Lowest price of the day.
-                  - 'close': Closing price.
-                  - 'volumeto': Volume traded in USD (we use this, not volumefrom).
-                  - Other fields like 'time', 'conversionSymbol' (ignored).
+        raw_data (list): List of daily crypto records from CryptoCompare API.
+                        Each record is a dictionary containing:
+                        - 'time': Unix timestamp (seconds since epoch).
+                        - 'open': Opening price of the day.
+                        - 'high': Highest price of the day.
+                        - 'low': Lowest price of the day.
+                        - 'close': Closing price of the day.
+                        - 'volumeto': Volume traded in USD (we use this, not volumefrom).
+                        - Other fields like 'conversionSymbol' (ignored).
     
     Returns:
-        Dictionary with this structure:
-        {
-            'open': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-            'high': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-            'low': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-            'close': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-            'volume': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-            'count': int,
-            'standing': str
-        }
+        dict: Dictionary with this structure:
+            {
+                'data_points': [
+                    {
+                        'timestamp': str (MM-DD-YYYY HH:MM),
+                        'open': float,
+                        'high': float,
+                        'low': float,
+                        'close': float,
+                        'volume': float
+                    },
+                    ...
+                ],
+                'open': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'high': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'low': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'close': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'volume': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                'count': int,
+                'standing': str
+            }
     
     Raises:
-        ValueError: If data is empty or missing required fields.
-        KeyError: If expected OHLCV fields are not in the data.
-        TypeError: If values cannot be converted to float.
+        ValueError: If data is empty or missing required fields, or if values 
+                   cannot be converted to float.
+        KeyError: If expected OHLCV or time fields are not in the data.
+        TypeError: If timestamp conversion fails or values have wrong type.
     
     Example:
-        >>> raw = [{'open': 100, 'high': 105, 'low': 98, 'close': 102, 'volumeto': 1000000}, ...]
+        >>> raw = [
+        ...     {'time': 1760572800, 'open': 100, 'high': 105, 'low': 98, 
+        ...      'close': 102, 'volumeto': 1000000},
+        ...     ...
+        ... ]
         >>> parsed = parse_data(raw)
         >>> print(parsed['close']['mean'])
+        102.0
+        >>> print(parsed['data_points'][0]['timestamp'])
+        '11-14-2025 00:00'
+        >>> print(parsed['data_points'][0]['close'])
         102.0
     
     Notes:
         - This is the "parsing" step - cleaning and structuring messy data.
-        - We ignore fields like 'time', 'conversionSymbol', 'conversionType', 'volumefrom'.
+        - Unix timestamps are converted using datetime.fromtimestamp().
+        - Time format is MM-DD-YYYY HH:MM (e.g., "11-14-2025 00:00").
+        - Since this is daily data, time is usually 00:00 (midnight UTC).
+        - We ignore fields like 'conversionSymbol', 'conversionType', 'volumefrom'.
         - Volume uses 'volumeto' (USD value) which is more meaningful than 'volumefrom'.
         - All prices are converted to float for consistent statistical calculations.
+        - Data points are ordered chronologically as returned by the API.
     """
     if not raw_data:
         raise ValueError("No data to parse - received empty list!")
 
     try:
-        opens = [float(entry["open"]) for entry in raw_data]
-        highs = [float(entry["high"]) for entry in raw_data]
-        lows = [float(entry["low"]) for entry in raw_data]
-        closes = [float(entry["close"]) for entry in raw_data]
-        volumetos = [float(entry["volumeto"]) for entry in raw_data]
+        data_points = []
+        for entry in raw_data:
+            timestamp = datetime.datetime.fromtimestamp(entry["time"]).strftime("%m-%d-%Y %H:%M")
+            data_points.append({
+                "timestamp": timestamp,
+                "open": float(entry["open"]),
+                "high": float(entry["high"]),
+                "low": float(entry["low"]),
+                "close": float(entry["close"]),
+                "volume": float(entry["volumeto"])
+            })
+
+        opens = [point["open"] for point in data_points]
+        highs = [point["high"] for point in data_points]
+        lows = [point["low"] for point in data_points]
+        closes = [point["close"] for point in data_points]
+        volumetos = [point["volume"] for point in data_points]
 
     except KeyError as e:
         raise KeyError(f"Missing expected field in crypto data: {e}") from e
     except (ValueError, TypeError) as e:
         raise ValueError(f"Could not convert price data to float: {e}") from e
 
-    # Calculate statistics for each price field using our helper function.
     result = {
+        "data_points": data_points,
         "open": calculate_stats(opens),
         "high": calculate_stats(highs),
         "low": calculate_stats(lows),
@@ -301,56 +357,84 @@ def parse_data(raw_data):
 
 def fetch_crypto_data(symbol, days=30):
     """
-    Fetch cryptocurrency data from CryptoCompare API and return statistics.
+    Fetch cryptocurrency data from CryptoCompare API and return timestamped statistics.
     
     This is the main export function that orchestrates the entire data pipeline:
     1. Builds the API request with proper authentication.
-    2. Makes HTTP GET request to CryptoCompare.
-    3. Handles all possible HTTP errors (404, 403, 500, etc.).
+    2. Makes HTTP GET request to CryptoCompare API.
+    3. Handles all possible HTTP errors (404, 403, 500, etc.) with detailed messages.
     4. Validates the API response structure.
-    5. Parses the nested response to extract price records.
+    5. Parses the nested response to extract price records with timestamps.
     6. Calculates statistics using parse_data().
-    7. Returns data in the same format as fetch_stock_data().
+    7. Returns data in a structured format with both individual data points and summaries.
     
     Args:
-        symbol: Crypto symbol (e.g., 'BTC', 'ETH', 'SOL') - case insensitive
-        days: Number of days of historical data to fetch (default: 30)
-              Valid range: 1-2000 days
+        symbol (str): Crypto symbol (e.g., 'BTC', 'ETH', 'SOL', 'ADA').
+                     Case insensitive - will be converted to uppercase.
+        days (int, optional): Number of days of historical data to fetch.
+                             Default: 30 days.
+                             Valid range: 1-2000 days.
     
     Returns:
-        Dictionary in the format (structurally identical to fetch_stock_data):
-        {
-            'BTC': {  # The symbol in uppercase
-                'open': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-                'high': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-                'low': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-                'close': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-                'volume': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
-                'count': int
-            },
-            'standing': str  # 'risky', 'improving', 'declining', or 'stable'
-        }
+        dict | None: Dictionary in this format if successful:
+            {
+                'BTC': {  # The symbol in uppercase
+                    'data_points': [
+                        {
+                            'timestamp': '11-14-2025 00:00',
+                            'open': 78561.62,
+                            'high': 83608.26,
+                            'low': 76581.52,
+                            'close': 82919.47,
+                            'volume': 3744822903.84
+                        },
+                        ...
+                    ],
+                    'open': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                    'high': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                    'low': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                    'close': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                    'volume': {'mean': float, 'std': float, 'median': float, 'min': float, 'max': float},
+                    'count': int
+                },
+                'standing': str  # 'risky', 'improving', 'declining', or 'stable'
+            }
         
-        Returns None if any error occurs.
+        Returns None if any error occurs (network, API, or data processing errors).
     
     Raises:
         Does not raise exceptions - catches all errors and returns None.
-        Prints error messages to console for debugging.
+        Prints detailed error messages to console for debugging.
     
     Example:
         >>> data = fetch_crypto_data("BTC", days=30)
         >>> if data:
         ...     print(f"BTC average close: ${data['BTC']['close']['mean']:.2f}")
         ...     print(f"Market status: {data['standing']}")
+        ...     print(f"Latest price on {data['BTC']['data_points'][-1]['timestamp']}: "
+        ...           f"${data['BTC']['data_points'][-1]['close']:.2f}")
+        Fetching 30 days of data for BTC...
+        Yay! The connection works!
+        
         BTC average close: $82919.47
         Market status: stable
+        Latest price on 11-14-2025 00:00: $82919.47
+        
+        >>> # Access individual data points
+        >>> for point in data['BTC']['data_points'][:3]:
+        ...     print(f"{point['timestamp']}: ${point['close']:.2f}")
+        11-14-2025 00:00: $82919.47
+        11-13-2025 00:00: $80000.00
+        11-12-2025 00:00: $78500.00
     
-    API Structure:
+    API Details:
         Request URL: https://min-api.cryptocompare.com/data/v2/histoday
         Parameters:
             - fsym: From symbol (the crypto, e.g., BTC).
             - tsym: To symbol (the fiat currency, e.g., USD).
-            - limit: Number of days to fetch.
+            - limit: Number of days to fetch (1-2000).
+        Headers:
+            - authorization: "Apikey {your_api_key}"
         Response Structure:
             {
                 "Response": "Success",
@@ -373,16 +457,23 @@ def fetch_crypto_data(symbol, days=30):
             }
     
     Error Handling:
-        - Network errors: Timeout, ConnectionError.
-        - HTTP errors: 404 (Not Found), 403 (Forbidden), 500 (Server Error).
-        - API errors: Invalid symbol, rate limiting.
+        - Network errors: Timeout (10s limit), ConnectionError.
+        - HTTP errors: 
+            * 404 (Not Found): API endpoint doesn't exist.
+            * 403 (Forbidden): Invalid API key or insufficient permissions.
+            * 500 (Server Error): CryptoCompare server issues.
+        - API errors: Invalid symbol, rate limiting, malformed requests.
         - Data errors: Empty response, missing fields, invalid structure.
+        All errors are caught, logged to console, and return None.
     
     Notes:
         - CryptoCompare API has rate limits (check their documentation).
-        - API key is required and loaded from .env file.
+        - API key is required and loaded from .env file via get_secret().
         - Response is nested: data["Data"]["Data"] contains the actual records.
         - This function matches fetch_stock_data() output format for consistency.
+        - Request timeout is set to 10 seconds to prevent hanging.
+        - Timestamps are converted from Unix format to MM-DD-YYYY HH:MM.
+        - Data points are returned in chronological order.
     """
 
     try:
