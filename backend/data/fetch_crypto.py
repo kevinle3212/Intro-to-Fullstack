@@ -86,7 +86,6 @@ Dependencies:
 - requests: HTTP library for making API calls.
 - statistics: Built-in Python module for statistical calculations.
 - datetime: Built-in Python module for timestamp conversions.
-- pprint: Pretty-print for debugging output.
 - python-dotenv: Load environment variables from .env file (via support.py).
 
 Environment Variables:
@@ -126,7 +125,6 @@ Author: Kevin Le
 Last Modified: November 14, 2025
 """
 
-from pprint import pprint
 import datetime
 import statistics
 import requests
