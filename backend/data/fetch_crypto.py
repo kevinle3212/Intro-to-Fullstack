@@ -580,6 +580,3 @@ def fetch_crypto_data(symbol, days=30):
     except (TypeError, AttributeError, RuntimeError) as e:
         print(f"Unexpected processing error occurred: {type(e).__name__} - {e}")
         return None
-
-fetched_data = fetch_crypto_data("BTC")
-pprint(fetched_data)
