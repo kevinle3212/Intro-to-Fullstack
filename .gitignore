@@ -112,3 +112,5 @@ dmypy.json
 
 # Rope (Python refactoring library)
 .ropeproject
+
+app.log
