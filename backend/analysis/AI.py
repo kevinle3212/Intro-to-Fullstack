@@ -7,17 +7,31 @@
 from openai import OpenAI, AuthenticationError # pip install openai
 #from backend.utils.support import get_secret
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+from openai import OpenAI
 
 class AI:
     
     def __init__(self, model="gpt-4o") -> None:
     
-        self.key = os.getenv("OPENAI_API_KEY")
+        self.key = self.__set_key()
         self.client = self.__set_client()
         self.model = model
-
+    
+    def __set_key(self):
+        
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+        load_dotenv(env_path)
+        print(env_path)
+        return os.getenv("OPENAI_API_KEY")
+    
     def __set_client(self):
-        client = OpenAI()
+
+        if not self.key:
+            raise ValueError("OPENAI_API_KEY environment variable is NOT set.")
+
+        client = OpenAI(api_key=self.key)
         try:
            client = OpenAI()
            return client
@@ -58,8 +72,9 @@ class AI:
     
             
         
-if __name__ == "__main__":
-    model = AI()
-    ticker = input("Enter Ticker: ")
-    payload = model.request_query(f"Give me a short summary on {ticker}, maybe include recent news, lastly what is market sentemin? respond in paragraph form, no bullet points or headers or fancy titles")
-    print(payload["response"])
+# if __name__ == "__main__":
+#     model = AI()
+#     ticker = input("Enter Ticker: ")
+#     payload = model.request_query(f"Give me a short summary on {ticker}, maybe include recent news, lastly what is market sentemin? respond in paragraph form, no bullet points or headers or fancy titles")
+#     if not payload: print(payload) 
+#     else: print(payload["response"])
