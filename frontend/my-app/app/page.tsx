@@ -14,7 +14,7 @@ const Body = () => {
         </p>
 
         <button 
-            onClick={() => router.push('')} 
+            onClick={() => router.push('/search')} 
             className="h-15 w-80 rounded-md mt-5 bg-[#444444] text-white text-[18px] hover:bg-[#343232]">
                 Search Stocks Now
         </button>
