@@ -1,3 +1,16 @@
-admin.md
+# Environment Secret Variables
+.env
+.env.*
 
-test.py
+# Operating System
+.DS_Store
+
+# Python Generated Files (Bytecode, Cache, etc.)
+__pycache__/
+*.py[cod]
+
+# Virtual Environments
+venv/
+
+# Testing
+test/
