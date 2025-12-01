@@ -16,7 +16,7 @@ const Header = () => {
                 Home
             </button>
 
-            <button onClick={() => router.push('')} 
+            <button onClick={() => router.push('/search')}
                 className="text-[18px] text-black font-medium hover:underline">
                 Stock Search
             </button>
