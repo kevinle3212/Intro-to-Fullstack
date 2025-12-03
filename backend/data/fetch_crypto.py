@@ -120,11 +120,10 @@ def fetch_crypto_data(symbol, days=30):
     data = response.json()
     #pprint(data)
     parsed_data = parse_data(data)
-    pprint(parsed_data)
     
     
-    details = get_data_details(parsed_data)
-    pprint(details)
+    #details = get_data_details(parsed_data)
+    #pprint(details)
     
     # standing = get_standing(details)
     # print(standing)   
@@ -142,4 +141,3 @@ def parse_data(data:dict) -> list[dict]:
     
     return parsed_data
 
-fetch_crypto_data('BTC', 30)

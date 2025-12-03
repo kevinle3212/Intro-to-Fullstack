@@ -1,7 +1,7 @@
 from dotenv import load_dotenv # pip install python-dotenv
 from os import getenv
 
-LOCAL_PATH_TO_SECRET = "Absolute/path/to/.env"
+LOCAL_PATH_TO_SECRET = "C:\Users\Justin\Desktop\Intro-to-Fullstack\backend\.env"
 
 class MissingSecretError(Exception):
     pass

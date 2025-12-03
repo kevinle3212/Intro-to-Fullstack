@@ -1,68 +1,86 @@
-
 # _____________________________________ Module 1 _____________________________________ #
 
-import requests # run `pip install requests` if haven't already
-from pprint import pprint
-from dotenv import load_dotenv
 import os
+import pandas as pd
+import yfinance as yf
+from dotenv import load_dotenv
+from pprint import pprint
 
-# For code running (print testing, etc...), run the file as a `module` with the flag -m
-# py -m backend.data.fetch_stocks <- no .py
 
-# we will export this function 
-
-
-def get_data_details(data : dict)->dict:
+def get_data_details(data: dict) -> dict:
     '''
     This function takes in the data dictionary fetched from the API and extracts relevant details.
-    
+
     Parameters:
-    - data (dict): The JSON data fetched from the API.
-    
+    - data (dict): The JSON-like data fetched from the API (or yfinance),
+      shaped like:
+        {
+            "Meta Data": { "2. Symbol": "IBM", ... },
+            "Time Series (60min)": {
+                "2024-01-01 10:00:00": {"open": "...", "high": "...", ...},
+                ...
+            }
+        }
+
     Returns:
-    - dict: A dictionary containing extracted details such as metadata and time series data.
+    - dict: A dictionary containing extracted stats and row count, e.g.:
+        {
+            "IBM": {
+                "open":  {"mean": ..., "std": ..., "median": ..., "low": ..., "max": ...},
+                "high":  {...},
+                "low":   {...},
+                "close": {...},
+                "volume": {...}
+            },
+            "count": 1234
+        }
     '''
     details = {}
 
-    # Turns the metadata into a dictionary where each time interval is a new row
-    stocks = pd.DataFrame.from_dict(data["Time Series (60min)"], orient='index')
+    # Turns the time series into a DataFrame where each time interval is a row
+    stocks = pd.DataFrame.from_dict(data["Time Series (60min)"], orient="index")
     cols = ["open", "high", "low", "close", "volume"]
     stocks.columns = cols
-    
-    
-    # Extract data for each column    
-    foo = {}
+
+    # Extract stats for each column
+    stats = {}
     for col in cols:
         col_data = stocks[col].astype(float)
-        foo[col] = {
+        stats[col] = {
             "mean": col_data.mean(),
             "std": col_data.std(),
             "median": col_data.median(),
             "low": col_data.min(),
             "max": col_data.max(),
         }
-    
-    # Metadata (mean, std, low, max)
-    details[data["Meta Data"]["2. Symbol"]] = foo
-    
-    # Numb of rows
-    count = stocks.shape[0]
-    details["count"] = count
-        
+
+    # Use the symbol as the top-level key
+    symbol = data["Meta Data"]["Symbol"]
+    details[symbol] = stats
+
+    # Number of rows
+    details["count"] = stocks.shape[0]
+
     return details
 
-def get_standing(details:dict)->str:
-    
-    data = details[tuple(details.keys())[0]]
-    
-    open_stats = data['open']
-    high_stats = data['high']
-    low_stats = data['low']
-    close_stats = data['close']
 
-    price_range = high_stats['mean'] - low_stats['mean']
-    volatility = close_stats['std']
-    skew = close_stats['median'] - close_stats['mean']
+def get_standing(details: dict) -> str:
+    '''
+    Take the details dict from get_data_details and return a qualitative standing.
+    '''
+
+    # Find the symbol key (anything that's not "count")
+    symbol_key = next(k for k in details.keys() if k != "count")
+    data = details[symbol_key]
+
+    open_stats = data["open"]
+    high_stats = data["high"]
+    low_stats = data["low"]
+    close_stats = data["close"]
+
+    price_range = high_stats["mean"] - low_stats["mean"]
+    volatility = close_stats["std"]
+    skew = close_stats["median"] - close_stats["mean"]
 
     # You can tune these thresholds however you like
     if price_range > 10 and volatility > 5:
@@ -76,50 +94,77 @@ def get_standing(details:dict)->str:
 
     return standing
 
-def fetch_stock_data(params:str, base_url:str=" https://www.alphavantage.co", endpoint:str="query"):
+
+def fetch_stock_data(symbol: str = "IBM", interval: str = "60m", period: str = "1mo") -> dict | None:
     '''
-    URL Sample:
-    https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=IBM&outputsize=full&apikey=demo
-    
-    API Key:
-    ---
-    
-    Full Documentation:
-    
-    https://www.alphavantage.co/documentation/ <---------- # TODO 1
-    
+    Fetch intraday stock data using yfinance and mirror the existing Alpha Vantage–style data shape.
+
+    Returns a dict like:
+        {
+            "data": { "Meta Data": {...}, "Time Series (60min)": {...} },
+            "details": {...},   # stats from get_data_details
+            "standing": "stable" | "risky" | ...
+        }
+    Or None on error.
     '''
 
     load_dotenv()
-    api_key = os.getenv("API_KEY")
 
-    result = {}
-    request_uri = f'{base_url}' + '/' + f'{endpoint}' + f'{params}' + '&apikey=' + f"{api_key}"  # TODO 2: build the request URI here!! use the parameters (base_url, endpoint, params) as building blocks
-    print(f"Request URI: {request_uri}\n")
+    result: dict = {}
+    print(f"Fetching {symbol} with interval={interval} and period={period}\n")
+
     try:
-        
-        response = requests.get(request_uri) # creates the request
-        
-        if response.status_code == 404: # 404 not found
+        ticker = yf.Ticker(symbol)
+        data_frame = ticker.history(interval=interval, period=period)
+
+        # Preserve the existing try/if error handling style
+        if data_frame is None or data_frame.empty:  # not found or no data
             raise Exception("The error indicates that the request was not found. Check the request and try again.")
-        elif response.status_code == 403: # 403 forbidden
-            raise Exception("Access was denied to you. Ensure exact API key spelling and try again. If issue persists contact Daniel")
-        elif response.status_code == 200: # 200 OK
-            print('Yay! The connection works!\n')
+        elif "Open" not in data_frame.columns:  # missing expected fields
+            raise Exception("Access was denied to you. Ensure exact parameters and try again.")
+        else:  # data retrieved
+            print("Yay! The connection works!\n")
 
-            data:dict = response.json() # get the content of the API. This should include the JSON files
-            pprint(data)
-            
+            # Keep only the columns we need and rename to lower-case
+            data_frame = data_frame[["Open", "High", "Low", "Close", "Volume"]].copy()
+            data_frame.columns = ["open", "high", "low", "close", "volume"]
+
+            # Format index as string timestamps
+            data_frame.index = data_frame.index.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Mirror the Alpha Vantage-like shape
+            time_series_key = "Time Series (60min)"
+            meta = {
+                "Information": "Intraday data from yfinance",
+                "Symbol": symbol,
+                "Interval": interval,
+                "Period": period,
+            }
+
+            data = {
+                "Meta Data": meta,
+                time_series_key: data_frame.to_dict(orient="index"),
+            }
+
+            # Attach raw-like data
+            result["data"] = data
+
+            # Compute stats + standing
             details = get_data_details(data)
-            
-
             standing = get_standing(details)
-            result = details["standing"] = standing
-        
-        return result # Done
+
+            result["details"] = details
+            result["standing"] = standing
+
+        return result
 
     except Exception as some_error:
         print(f"There was an issue with the data fetching function. Error:\n{some_error}")
         return None
 
-#fetch_stock_data(params="/?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=60min&outputsize=full")
+
+if __name__ == "__main__":
+    print("Running Stock")
+    data = fetch_stock_data(symbol="AAPL", interval="60m", period="max")
+   
+    pprint(data["details"]["AAPL"])

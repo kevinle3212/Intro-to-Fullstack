@@ -5,11 +5,12 @@
 # We don't do relative paths for projects like these.
 
 # ____________________ Loaders ____________________ #
-from backend.data.fetch_stocks import fetch_stock_data
-from backend.data.fetch_crypto import fetch_crypto_data
+from data.fetch_stocks import fetch_stock_data
+
+#from data.fetch_crypto import fetch_crypto_data
 
 # connection to SQL class that we created in Module 3
-from backend.database.Connection import Connection
+from database.Connection import Connection
 
 # main commander class. Similar to a main function.
 # we will use this export to manage all of the API endpoint we will create
@@ -22,7 +23,7 @@ class Commander(Connection):
 
         # vvv Hardcode This Attributes vvv #
         
-        self.stock_parameters = 'params="/?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=60min&outputsize=full"'
+        #self.stock_parameters = 'params="/?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=60min&outputsize=full"'
         
         self.stock_data:dict = self.__load_stocks()
 
@@ -39,49 +40,61 @@ class Commander(Connection):
 
         self.tables:list = self.show_tables() 
         
-    def __load_stocks(self):
-        result = fetch_stock_data(self.stock_parameters)
+    def __load_stocks(self, ticker:str, period:str = "max" ):
+        result = fetch_stock_data(symbol=ticker, interval="60m", period=period)
         return result
     
-    def __load_crypto(self):
-        result = fetch_crypto_data(self.crypto_ticker, self.crypto_limit) if self.crypto_limit else  fetch_crypto_data(self.crypto_ticker)
-        return result
+    # 
+    # def __load_crypto(self):
+    #     result = fetch_crypto_data(self.crypto_ticker, self.crypto_limit) if self.crypto_limit else  fetch_crypto_data(self.crypto_ticker)
+    #     return result
     
 # __________________________________________________ #
 
-    def __init_stocks_table(self):
+    def __init_stocks_table(self, tickers, period:str = "max" ):
         '''
         Initializes and populates the stocks table from self.stock_data
         ''' 
-        for ticker, metrics in self.stock_data.items():
-            if ticker in ['count', 'standing']:
-                continue
+        for t in tickers:
+            result = fetch_stock_data(symbol=t, interval="60m", period=period) 
 
-            for metric, stats in metrics.items():
-                status = self.query_submit(
-                    table="Stocks", query={}
-                )
-                
+            time_series = result["data"]["Time Series (60min)"]
+            symbol = result["data"]["Meta Data"]["Symbol"]
+            metrics = result["details"][symbol]
+
+            for timestamp_str, ohlcv in time_series.items():
+                row = {
+                    "symbol": symbol,
+                    "timestamp": timestamp_str,
+                    "open": ohlcv["open"],
+                    "high": ohlcv["high"],
+                    "low": ohlcv["low"],
+                    "close": ohlcv["close"],
+                    "volume": ohlcv["volume"]
+                }
+
+                status = self.query_submit("stocks_series", row)
+                                
                 if status != 201:
                     pass # something happens
+            
+            for metric, lmmms in metrics.items():
+                row = {
+                    "symbol": symbol,
+                    "metric": metric,
+                    "max": lmmms["max"],
+                    "mean": lmmms["mean"],
+                    "median": lmmms["median"],
+                    "std": lmmms["std"],
+                    "low": lmmms["low"]
+                }
 
-    def __init_crypto_table(self):
-        '''
-        Initializes and populates the crypto table from self.crypto_data
-        '''
-        for ticker, metrics in self.crypto_data.items():
-            if ticker in ['count', 'standing']:
-                continue
-
-            for metric, stats in metrics.items():
-                status = self.query_submit(
-                    ...
-                )
-                
+                status = self.query_submit("stocks_metric", row)
+                                
                 if status != 201:
                     pass # something happens
     
-    def __init_tables(self):
+    def _init_tables(self, tickers):
         '''
         *This function should only be run once*
         
@@ -97,11 +110,11 @@ class Commander(Connection):
         the entries one by one with the `query_submit` function. 
         '''
         try:
-            self.query_create_table('stocks')
-            self.query_create_table('crypto')
+            self.query_create_table_series('stocks_series')
+            self.query_create_table_metric("stocks_metric")
             
-            self.__init_stocks_table()
-            self.__init_crypto_table()
+            self.__init_stocks_table(tickers)
+            #self.__init_crypto_table()
  
         except Exception as error:
             print("There was an error initializing the tables operation")
@@ -132,3 +145,9 @@ class Commander(Connection):
 
     def __is_valid_table(self, table):
         return table in self.tables
+    
+if __name__ == "__main__":
+    print("Running Commander")
+    com = Commander()
+    com._init_tables(["AAPL", "NVIDA", "META"])
+    

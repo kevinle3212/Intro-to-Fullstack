@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
+from backend.utils.support import get_secret
 
 class AI:
     
@@ -20,11 +21,7 @@ class AI:
         self.model = model
     
     def __set_key(self):
-        
-        env_path = Path(__file__).resolve().parent.parent / ".env"
-        load_dotenv(env_path)
-        print(env_path)
-        return os.getenv("OPENAI_API_KEY")
+        return get_secret("OPEN_AI")
     
     def __set_client(self):
 
@@ -33,8 +30,8 @@ class AI:
 
         client = OpenAI(api_key=self.key)
         try:
-           client = OpenAI()
-           return client
+            client = OpenAI()
+            return client
         except Exception as error:
             print(f"Error ocurred when intializing the client. Error: {error}")
     

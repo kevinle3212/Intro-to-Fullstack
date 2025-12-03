@@ -10,7 +10,7 @@ class Connection:
     def __init__(self) -> None:
         
         self.host = 'localhost'
-        # TODO: Read module_3.md instructions to set these up according to what you put
+
         self.user = 'root'
         self.password = 'Shanny.139'
         self.database = 'IntroFullstack'
@@ -46,20 +46,45 @@ class Connection:
     
     # ___________________ Queries ___________________ #
     
-    def query_create_table(self, name): # Here is a demo of a query to create a table
+    def query_create_table_series(self, name): # Here is a demo of a query to create a table
         try:
             # Here is the pre-defined structure of a table
             query = f"""
             CREATE TABLE {name} (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                ticker VARCHAR(5),
+                timestamp DATETIME
+                symbol VARCHAR(5),
+                close DOUBLE,
+                high DOUBLE,
+                low DOUBLE,
+                open DOUBLE,
+                volume DOUBLE,
+            )
+            """
+             
+            self.cursor.execute(query)
+            
+            self.conn.commit()
+            
+            return 'success'
+            
+        except mysql.connector.Error:
+            
+            return 'failure'
+        
+    def query_create_table_metric(self, name): # Here is a demo of a query to create a table
+        try:
+            # Here is the pre-defined structure of a table
+            query = f"""
+            CREATE TABLE {name} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                symbol VARCHAR(5),
                 metric VARCHAR(10),
                 mean DOUBLE,
                 median DOUBLE,
                 std DOUBLE,
                 low DOUBLE,
                 max DOUBLE,
-                count INT
             )
             """
              
@@ -73,35 +98,37 @@ class Connection:
             
             return 'failure'
     
-    def query_submit(self, table:str, query: dict) -> int:
-        '''
-        Arguably the most important function. This could go perfect or it can cause lots of issues.
-        Enters a record on a table.
-        Returns a standard status code according to the operation's outcome. Example, 201 if success.
-        https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
-        
-        HINT:
-        You don't know what type of data to expect! 
-        What could you do to upload dynamic data? (e.g. **kwargs, dictionary, etc.. (?))
-        '''
-        
-        # Extract Data from dict to be used in query
+    def query_submit(self, table: str, data: dict) -> dict:
+        """
+        Insert a row dynamically into a table using a dictionary.
+        Returns:
+            {
+                "status": 201,
+                "id": <inserted_id>
+            }
+        or
+            {
+                "status": 400,
+                "error": "<message>"
+            }
+        """
+
+        # Extract column names and values
         columns = ", ".join(data.keys())
         values = tuple(data.values())
         placeholders = ", ".join(["%s"] * len(values))
 
         try:
-            query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
-            self.cursor.execute(query, values)
+            sql = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+            self.cursor.execute(sql, values)
 
-            # Auto-increment ID
             new_id = self.cursor.lastrowid
-
             self.conn.commit()
 
-            return 201
+            return {"status": 201, "id": new_id}
+
         except mysql.connector.Error as e:
-            return 400
+            return {"status": 400, "error": str(e)}
     
     def query_extract(self, table:str=None, query:str=None) -> dict:
         '''
@@ -194,49 +221,8 @@ class Connection:
         else:
             return f"Quiting db: {self.database} Deletion.."
     
-if __name__ == "__main__":
-    con = Connection()
-    print(f"Connection Status: {con.status}")
 
-    print(f"Stock Table Dropped: {con.query_delete_table('Stocks')}")
-    print(f"Crypto Table Dropped: {con.query_delete_table('Crypto')}")
-    print("Tables Dropped")
-    print(con.show_tables())
-        
-    print(f"Stock Table Creation: {con.query_create_table('Stocks')}")
-    print(f"Crypto Table Creation: {con.query_create_table('Crypto')}")
-    print("Tables Made")
-    
-    data = {
-    "ticker": "BTC",
-    "metric": "close",
-    "mean": 185.2,
-    "median": 184.9,
-    "std": 1.1,
-    "low": 182.0,
-    "max": 188.5,
-    "count": 30}
-    
-    print(f"query_submit(self, table:str, data: dict): {con.query_submit('Crypto', data)}")
-   
-    for i in range(250): 
-        data = {
-        "ticker": random.choice(["APPL", "SPY500", "AWS"]),
-        "metric": random.choice(["CLOSE", "OPEN", "LOW", "HIGH "]),
-        "mean": np.random.randint(0,2550),
-        "median": np.random.randint(0,2550),
-        "std": np.random.randint(0,2550),
-        "low": np.random.randint(0,2550),
-        "max": np.random.randint(0,2550),
-        "count": np.random.randint(0,2550)
-        }
-
-        print(f"query_submit(self, table:str, data: dict): {con.query_submit('Stocks', data)}")
-    
-    for i in con.query_extract("Stocks", query="SELECT * FROM Stocks WHERE ticker like 'AWS' LIMIT 10;"):
-        print(i)
-    
-    
-    
-    print(con.show_tables())
-    
+DEBUG = True
+if __name__ == "__main__" and DEBUG:
+    print("\n Running Connection !\n")
+    con = Connection() 
