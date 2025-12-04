@@ -19,7 +19,7 @@ class AI:
         """
         Retrieves API key from environment variables or your secrets manager.
         """
-        key = "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" 
+        key = ...
         if not key:
             raise ValueError("OPEN_AI key not found.")
         return key
