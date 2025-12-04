@@ -6,7 +6,7 @@ export default function SearchPage() {
   
   <input
     type="text"
-    placeholder="Enter stock symbol..."
+    placeholder="Enter stock ticker..."
     className=" bg-gray-300 text-black border border-gray-700 w-2/3 max-w-xl h-20 text-xl text-center p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
   />
 
