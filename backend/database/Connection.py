@@ -52,13 +52,13 @@ class Connection:
             query = f"""
             CREATE TABLE {name} (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                timestamp DATETIME
-                symbol VARCHAR(5),
+                timestamp DATETIME NOT NULL,
+                symbol VARCHAR(5) NOT NULL,
                 close DOUBLE,
                 high DOUBLE,
                 low DOUBLE,
                 open DOUBLE,
-                volume DOUBLE,
+                volume DOUBLE
             )
             """
              
@@ -84,7 +84,7 @@ class Connection:
                 median DOUBLE,
                 std DOUBLE,
                 low DOUBLE,
-                max DOUBLE,
+                max DOUBLE
             )
             """
              

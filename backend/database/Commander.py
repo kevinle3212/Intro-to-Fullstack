@@ -8,10 +8,11 @@
 from data.fetch_stocks import fetch_stock_data
 
 #from data.fetch_crypto import fetch_crypto_data
+from datetime import datetime
 
 # connection to SQL class that we created in Module 3
 from database.Connection import Connection
-
+from analysis.AI import AI
 # main commander class. Similar to a main function.
 # we will use this export to manage all of the API endpoint we will create
 class Commander(Connection):
@@ -63,9 +64,12 @@ class Commander(Connection):
             metrics = result["details"][symbol]
 
             for timestamp_str, ohlcv in time_series.items():
+                # Normalize timestamps to ensure mysql DATETIME stores them as yyyy-mm-dd hh-mm-ss
+                timestamp_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+
                 row = {
                     "symbol": symbol,
-                    "timestamp": timestamp_str,
+                    "timestamp": timestamp_dt,
                     "open": ohlcv["open"],
                     "high": ohlcv["high"],
                     "low": ohlcv["low"],

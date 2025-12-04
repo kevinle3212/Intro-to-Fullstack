@@ -4,6 +4,7 @@ from flask_cors import CORS
 from flask import Flask, jsonify, request
 
 from database.Connection import Connection
+from analysis.AI import AI
 
 def create_app(): 
     app = Flask(__name__)
@@ -40,7 +41,14 @@ def _fetch_last_month_data(ticker: str, limit: int = 500):
         """
         conn.cursor.execute(query, (ticker, limit))
         cols = [col[0] for col in conn.cursor.description]
-        rows = [dict(zip(cols, row)) for row in conn.cursor.fetchall()]
+        rows = []
+        for row in conn.cursor.fetchall():
+            item = dict(zip(cols, row))
+            ts = item.get("timestamp")
+            if ts:
+                # Ensure JSON serializable timestamp
+                item["timestamp"] = ts.isoformat(sep=" ")
+            rows.append(item)
         return rows, None
     except Exception as err:
         return None, str(err)
@@ -91,16 +99,45 @@ def stock_last_month(ticker):
 @app.route("/stock/<ticker>/openapi-prompt")
 def stock_openapi_prompt(ticker):
     """
-    Provide an OpenAPI-style prompt describing how to request last-month data for this ticker.
+    Use the AI client to generate an OpenAPI-style request snippet for last-month stock data.
     """
-    prompt = (
-        "Create an OpenAPI 3.0 path item for GET /stock/{ticker}/last-month that "
-        "accepts an optional integer query parameter 'limit' (default 500) and returns "
-        "an array of OHLCV records (id, timestamp, symbol, open, high, low, close, volume) "
-        "for the past month, sorted by timestamp descending."
-    ).format(ticker=ticker)
+    ai_client = AI()
+    prompt =    f"""
+                You are an experienced equity analyst.
 
-    return jsonify({"status": "OK", "ticker": ticker, "prompt": prompt}), 200
+                Write a concise, retail-investor-friendly overview of the stock with ticker "{ticker}".
+
+                Your response must:
+                - First, briefly explain what the company does and its main business lines.
+                - Then, summarize any notable recent events or themes that may affect the stock (such as earnings trends, product launches, regulatory news, or macro conditions). 
+                - Give me links to articles if you find any
+                - Then using data give a technical overview, like lows, highs, or any other major numbers 
+                - Finally, describe the current overall market sentiment toward this stock (for example: bullish, bearish, mixed, or uncertain) and explain why in qualitative terms.
+                
+
+                Constraints:
+                - Respond as a single paragraph of 6 to 7 sentences.
+                - Do NOT use bullet points, headings, titles, or markdown formatting.
+                - Use clear, neutral, professional language and avoid hype.
+                - If you are not confident about specific recent events or sentiment, say so explicitly instead of guessing.
+                - Do not make up exact prices, dates, or analyst targets.            
+                """
+                    
+
+
+    ai_response = ai_client.request_query(prompt)
+    if ai_response.get("message") != "success":
+        return jsonify({
+            "status": "error",
+            "message": ai_response.get("message", {}),
+            "details": ai_response.get("response", {})
+        }), 500
+
+    return jsonify({
+        "status": "OK",
+        "ticker": ticker,
+        "response": ai_response.get("response")
+    }), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=4200, debug=False)

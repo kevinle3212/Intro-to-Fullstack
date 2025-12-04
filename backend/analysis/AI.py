@@ -1,77 +1,93 @@
-
 # _____________________________________ Module 5 _____________________________________ #
 
-# Here we will connect with an OpenAI through its SDK. This will allow us to directly access a 
-# functionality that ChatGPT would directly do.
-
-from openai import OpenAI, AuthenticationError # pip install openai
-#from backend.utils.support import get_secret
+from openai import OpenAI, AuthenticationError
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from openai import OpenAI
-from backend.utils.support import get_secret
+
+from pprint import pprint 
 
 class AI:
-    
-    def __init__(self, model="gpt-4o") -> None:
-    
+
+    def __init__(self, model="gpt-4o-mini") -> None:
+        # Load key securely
         self.key = self.__set_key()
         self.client = self.__set_client()
         self.model = model
-    
+
     def __set_key(self):
-        return get_secret("OPEN_AI")
-    
+        """
+        Retrieves API key from environment variables or your secrets manager.
+        """
+        key = "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" 
+        if not key:
+            raise ValueError("OPEN_AI key not found.")
+        return key
+
     def __set_client(self):
-
-        if not self.key:
-            raise ValueError("OPENAI_API_KEY environment variable is NOT set.")
-
-        client = OpenAI(api_key=self.key)
+        """
+        Initializes an authenticated OpenAI client.
+        """
         try:
-            client = OpenAI()
+            client = OpenAI(api_key=self.key)
             return client
         except Exception as error:
-            print(f"Error ocurred when intializing the client. Error: {error}")
-    
-    def __is_valid_response(self, response):
-        if not response:
-            print("No response to check")
-            return
-        
-        status = response["message"]
-        if status == "success":
-            return True
-        return False
-    
-    def request_query(self, prompt:str):
-        
-        if not self.client:
-            return {"message": "There was an error getting OpenAI client started", "response": {}}
-        if not prompt:
-            return {"message": "Prompt set is invalid", "response":{}}
-        try:
-            reponse = self.client.responses.create(
-                model = self.model,
-                input = prompt
-            )
-            content = reponse.output_text
-            return {"message": "success", "response" : content}
-        
-        except AuthenticationError:
-            return {"message":"API key is incorrect. Authentication is invalid", "response":{}}
-        except Exception as e:
-            return {"message":"There was an error initializing the prompt.", "response":{e}}
+            raise RuntimeError(f"Error initializing OpenAI client: {error}")
 
-        
-        
-    
+    def request_query(self, prompt: str):
+        """
+        Sends a text request to the OpenAI Responses API.
+        """
+        if not self.client:
+            return {"message": "Client not initialized", "response": None}
+
+        if not prompt or not isinstance(prompt, str):
+            return {"message": "Invalid prompt", "response": None}
+
+        try:
+            response = self.client.responses.create(
+                model=self.model,
+                input=prompt
+            )
+
+            # Extract assistant message
+            content = response.output_text
+            return {"message": "success", "response": content}
+
+        except AuthenticationError:
+            return {"message": "Invalid API key", "response": None}
+
+        except Exception as e:
+            return {"message": "Error sending prompt", "response": str(e)}
+
+
+if __name__ == "__main__":
+    model = AI()
+    ticker = input("Enter Ticker: ")
+
+    payload = model.request_query(
+                        prompt = f"""
+                You are an experienced equity analyst.
+
+                Write a concise, retail-investor-friendly overview of the stock with ticker "{ticker}".
+
+                Your response must:
+                - First, briefly explain what the company does and its main business lines.
+                - Then, summarize any notable recent events or themes that may affect the stock (such as earnings trends, product launches, regulatory news, or macro conditions). 
+                - Give me links to articles if you find any
+                - Then using data give a technical overview, like lows, highs, or any other major numbers 
+                - Finally, describe the current overall market sentiment toward this stock (for example: bullish, bearish, mixed, or uncertain) and explain why in qualitative terms.
+                
+
+                Constraints:
+                - Respond as a single paragraph of 6 to 7 sentences.
+                - Do NOT use bullet points, headings, titles, or markdown formatting.
+                - Use clear, neutral, professional language and avoid hype.
+                - If you are not confident about specific recent events or sentiment, say so explicitly instead of guessing.
+                - Do not make up exact prices, dates, or analyst targets.
+                -Seperate response in formated text ie headers and indents
             
-        
-# if __name__ == "__main__":
-#     model = AI()
-#     ticker = input("Enter Ticker: ")
-#     payload = model.request_query(f"Give me a short summary on {ticker}, maybe include recent news, lastly what is market sentemin? respond in paragraph form, no bullet points or headers or fancy titles")
-#     if not payload: print(payload) 
-#     else: print(payload["response"])
+                """
+                    )
+
+    pprint(payload)
