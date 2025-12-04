@@ -20,12 +20,6 @@ const Header = () => {
                 className="text-[18px] text-black font-medium hover:underline">
                 Stock Search
             </button>
-
-            <button 
-            onClick={() => router.push('')} 
-            className="text-[18px] text-black font-medium hover:underline">
-            About
-            </button>
           </nav>
         </header>
   );
